@@ -478,13 +478,34 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
 
 
 
+    /** On Wear OS make the terminal toolbar row an overlay that floats over the terminal text instead
+     * of occupying layout space below the terminal. The terminal stays full height (its text is not
+     * reflowed/resized when the toolbar is shown), the toolbar is aligned to the bottom in front of
+     * it and drawn with a slightly transparent background so the text underneath stays visible.
+     * Only applied on watches; on phones layout stays as upstream. */
+    private void setWatchTerminalToolbarOverlay() {
+        View drawerLayout = findViewById(R.id.drawer_layout);
+        if (drawerLayout != null) {
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) drawerLayout.getLayoutParams();
+            if (lp == null) return;
+            lp.removeRule(RelativeLayout.ABOVE);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            drawerLayout.setLayoutParams(lp);
+        }
+
+        View terminalToolbarViewPager = getTerminalToolbarViewPager();
+        if (terminalToolbarViewPager != null && terminalToolbarViewPager.getBackground() != null)
+            terminalToolbarViewPager.getBackground().setAlpha(200);
+    }
+
     private void setTerminalToolbarView(Bundle savedInstanceState) {
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (DeviceUtils.isWatchDevice(this)) {
             // On Wear OS start with the extra keys row hidden and let the user reveal it on demand
-            // with an upward swipe (see onWatchTerminalScroll()).
+            // with a downward scroll (see onWatchTerminalScroll()).
             terminalToolbarViewPager.setVisibility(View.GONE);
             mTerminalToolbarHiddenByWatchScroll = true;
+            setWatchTerminalToolbarOverlay();
         } else if (mPreferences.shouldShowTerminalToolbar()) {
             terminalToolbarViewPager.setVisibility(View.VISIBLE);
         }
@@ -520,28 +541,49 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
      * restored by the next scroll in the opposite direction. */
     private boolean mTerminalToolbarHiddenByWatchScroll = false;
 
-    /** Duration in ms of the terminal toolbar hide/show slide animation on Wear OS. */
-    private static final int WATCH_TERMINAL_TOOLBAR_ANIMATION_MS = 200;
+    /** The last measured height in px of the terminal toolbar. Used as the slide offset when the
+     * view is GONE (in which case the view's own {@code getHeight()} returns 0). */
+    private int mTerminalToolbarHeightPx = 0;
 
-    /** Reveal the terminal toolbar row on Wear OS. Called by
-     * {@link TerminalView.WatchTerminalScrollListener} only on watches; on phones the listener is
-     * never registered so behaviour stays untouched. One transition per gesture, no per-frame
-     * work. The toolbar is removed from the layout when hidden (GONE) so the terminal gets the
-     * full screen. Hiding is triggered by swiping down on the toolbar row itself (see
-     * {@link #onWatchTerminalToolbarSwipeDown()}), revealing by an upward swipe from the bottom
-     * edge of the terminal scroll area. */
+    /** Duration in ms of the terminal toolbar hide/show slide animation on Wear OS. */
+    private static final int WATCH_TERMINAL_TOOLBAR_ANIMATION_MS = 150;
+
+    /** Toggle the terminal toolbar row on Wear OS based on the terminal scroll direction. Called
+     * by {@link TerminalView.WatchTerminalScrollListener} only on watches; on phones the listener
+     * is never registered so behaviour stays untouched. One transition per direction, no
+     * per-frame work. The toolbar is removed from the layout when hidden (GONE) so the terminal
+     * gets the full screen. Scrolling downwards reveals the toolbar row, scrolling upwards hides
+     * it. Hiding is also possible by swiping down on the toolbar row itself (see
+     * {@link #onWatchTerminalToolbarSwipeDown()}). */
     private void onWatchTerminalScroll(boolean scrollUp) {
         final View terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (terminalToolbarViewPager == null) return;
-        // Reveal: slide the toolbar up into view again.
-        if (mTerminalToolbarHiddenByWatchScroll && terminalToolbarViewPager.getVisibility() != View.VISIBLE) {
-            mTerminalToolbarHiddenByWatchScroll = false;
-            terminalToolbarViewPager.animate().cancel();
-            terminalToolbarViewPager.setAlpha(0f);
-            terminalToolbarViewPager.setTranslationY(terminalToolbarViewPager.getHeight());
-            terminalToolbarViewPager.setVisibility(View.VISIBLE);
-            terminalToolbarViewPager.animate().translationY(0f).alpha(1f)
-                .setDuration(WATCH_TERMINAL_TOOLBAR_ANIMATION_MS).start();
+        if (scrollUp) {
+            // Scrolling upwards: slide the toolbar down out of view.
+            if (!mTerminalToolbarHiddenByWatchScroll && terminalToolbarViewPager.getVisibility() == View.VISIBLE) {
+                mTerminalToolbarHiddenByWatchScroll = true;
+                if (terminalToolbarViewPager.getHeight() > 0)
+                    mTerminalToolbarHeightPx = terminalToolbarViewPager.getHeight();
+                terminalToolbarViewPager.animate().cancel();
+                terminalToolbarViewPager.animate().translationY(mTerminalToolbarHeightPx).alpha(0f)
+                    .setDuration(WATCH_TERMINAL_TOOLBAR_ANIMATION_MS)
+                    .withEndAction(() -> {
+                        terminalToolbarViewPager.setVisibility(View.GONE);
+                        terminalToolbarViewPager.setAlpha(1f);
+                        terminalToolbarViewPager.setTranslationY(0f);
+                    }).start();
+            }
+        } else {
+            // Scrolling downwards: slide the toolbar up into view again.
+            if (mTerminalToolbarHiddenByWatchScroll && terminalToolbarViewPager.getVisibility() != View.VISIBLE) {
+                mTerminalToolbarHiddenByWatchScroll = false;
+                terminalToolbarViewPager.animate().cancel();
+                terminalToolbarViewPager.setAlpha(0f);
+                terminalToolbarViewPager.setTranslationY(mTerminalToolbarHeightPx);
+                terminalToolbarViewPager.setVisibility(View.VISIBLE);
+                terminalToolbarViewPager.animate().translationY(0f).alpha(1f)
+                    .setDuration(WATCH_TERMINAL_TOOLBAR_ANIMATION_MS).start();
+            }
         }
     }
 
@@ -581,6 +623,7 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
             (mProperties.getExtraKeysInfo() == null ? 0 : mProperties.getExtraKeysInfo().getMatrix().length) *
             toolbarHeightScaleFactor);
         terminalToolbarViewPager.setLayoutParams(layoutParams);
+        mTerminalToolbarHeightPx = layoutParams.height;
     }
 
     public void toggleTerminalToolbar() {

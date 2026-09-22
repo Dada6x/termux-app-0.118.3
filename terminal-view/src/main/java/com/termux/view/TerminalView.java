@@ -67,12 +67,12 @@ public final class TerminalView extends View {
     /** Non-null only on Wear OS: the live input connection so backspace can edit the buffered command line. */
     private TermuxInputConnection mWatchInputConnection;
 
-/** Listener notified on Wear OS when the user swipes up from the bottom edge of the terminal, so
- * the host can reveal the extra keys row on demand. The hide gesture is handled by the extra keys
- * row itself (swipe down on it), so this is only ever called to reveal. */
+/** Listener notified on Wear OS when the user scrolls the terminal, so the host can show or hide
+ * the extra keys row on demand. One notification per scroll direction change. */
     public interface WatchTerminalScrollListener {
-        /** Called once per watch gesture with {@code scrollUp} true if the finger moved upward
-         * (reveals the extra keys row) and false if it moved downward (host hides the row). */
+        /** Called once per watch scroll direction with {@code scrollUp} true if the finger moved
+         * upward (the host hides the extra keys row) and false if it moved downward (the host
+         * shows the extra keys row). */
         void onWatchTerminalScroll(boolean scrollUp);
     }
 
@@ -84,14 +84,12 @@ public final class TerminalView extends View {
     /** Whether the current gesture already notified the listener. */
     private boolean mWatchScrollToggleNotified = false;
 
-    /** Whether the current gesture started near the bottom edge of the terminal. */
-    private boolean mWatchScrollStartedAtBottomEdge = false;
+    /** Scroll direction of the last event of the current gesture: true when the finger moved up. */
+    private boolean mWatchLastScrollDirection = false;
 
-    /** Small drag distance in pixels that triggers the reveal. */
-    private static final float WATCH_SCROLL_TOGGLE_THRESHOLD_PX = 24f;
-
-    /** Height in pixels of the bottom edge band where an upward swipe reveals the extra keys row. */
-    private static final float WATCH_SCROLL_BOTTOM_EDGE_PX = 96f;
+    /** Small drag distance in pixels that triggers the toggle. Kept small so the carousel feels
+     * responsive on the watch, while still ignoring micro-scroll jitter. */
+    private static final float WATCH_SCROLL_TOGGLE_THRESHOLD_PX = 12f;
 
     /** Set a {@link WatchTerminalScrollListener} on Wear OS devices to react to finger scrolling. */
     public void setWatchTerminalScrollListener(WatchTerminalScrollListener watchTerminalScrollListener) {
@@ -216,14 +214,19 @@ public final class TerminalView extends View {
                     int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
                     mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
                     doScroll(e, deltaRows);
-                    if (isWatchDevice(getContext()) && mWatchTerminalScrollListener != null &&
-                        mWatchScrollStartedAtBottomEdge && deltaRows < 0) {
-                        // An upward swipe started near the bottom edge reveals the extra keys row.
-                        // Accumulate the dragged distance, one notification per gesture.
+                    if (isWatchDevice(getContext()) && mWatchTerminalScrollListener != null) {
+                        // Show the extra keys row when the finger scrolls down, hide it when the
+                        // finger scrolls up. One notification per direction, no per-frame work.
+                        boolean scrollUp = deltaRows < 0;
+                        if (scrollUp != mWatchLastScrollDirection) {
+                            mWatchLastScrollDirection = scrollUp;
+                            mWatchScrollDistance = 0f;
+                            mWatchScrollToggleNotified = false;
+                        }
                         mWatchScrollDistance += Math.abs(distanceY);
                         if (!mWatchScrollToggleNotified && mWatchScrollDistance >= WATCH_SCROLL_TOGGLE_THRESHOLD_PX) {
                             mWatchScrollToggleNotified = true;
-                            mWatchTerminalScrollListener.onWatchTerminalScroll(deltaRows < 0);
+                            mWatchTerminalScrollListener.onWatchTerminalScroll(scrollUp);
                         }
                     }
                 }
@@ -276,11 +279,8 @@ public final class TerminalView extends View {
 
             @Override
             public boolean onDown(float x, float y) {
-                // Only an upward swipe that starts near the bottom edge of the terminal reveals the
-                // extra keys row on watches.
                 mWatchScrollDistance = 0f;
                 mWatchScrollToggleNotified = false;
-                mWatchScrollStartedAtBottomEdge = y >= getHeight() - WATCH_SCROLL_BOTTOM_EDGE_PX;
                 // Why is true not returned here?
                 // https://developer.android.com/training/gestures/detector.html#detect-a-subset-of-supported-gestures
                 // Although setting this to true still does not solve the following errors when long pressing in terminal view text area
