@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.termux.app.terminal.io.WearLoopingExtraKeysView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/terminal_toolbar_wear_extra_keys"
+    style="?android:attr/buttonBarStyle"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToPadding="false" />
