@@ -1152,6 +1152,16 @@ public final class TerminalView extends View {
         }
     }
 
+    /** Inject text into the terminal like a clipboard paste, optionally followed by an enter key.
+     * On Wear OS this is how text received from the phone (the "type on phone" relay) ends up in
+     * the terminal. */
+    public void injectRemoteInputText(CharSequence text, boolean sendEnter) {
+        if (mEmulator == null || mTermSession == null) return;
+        mEmulator.paste(text.toString());
+        if (sendEnter)
+            mTermSession.write("\r");
+    }
+
     /** Input the specified keyCode if applicable and return if the input was consumed. */
     public boolean handleKeyCode(int keyCode, int keyMod) {
         // Ensure cursor is shown when a key is pressed down like long hold on (arrow) keys

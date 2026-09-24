@@ -176,6 +176,22 @@
             </intent-filter>
         </service>
 
+        <!-- "Type on phone" relay between the watch and a paired phone running the same app.
+        The listener is bound by Google Play services over the Wear link, so it must stay
+        exported. On the watch it only receives reply messages; on the phone it only receives
+        requests. -->
+        <service
+            android:name=".app.terminal.remote.TermuxWearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".app.terminal.remote.TermuxWearReplyReceiver"
+            android:exported="false" />
+
 
         <!-- This (or rather, value 2.1 or higher) is needed to make the Samsung Galaxy S8 mark the
         app with "This app is optimized to run in full screen." -->

@@ -18,6 +18,7 @@ android {
         implementation "androidx.recyclerview:recyclerview:1.1.0"
         implementation "androidx.viewpager:viewpager:1.0.0"
         implementation "com.google.guava:guava:24.1-jre"
+        implementation "com.google.android.gms:play-services-wearable:17.0.0"
         implementation "io.noties.markwon:core:$markwonVersion"
         implementation "io.noties.markwon:ext-strikethrough:$markwonVersion"
         implementation "io.noties.markwon:linkify:$markwonVersion"

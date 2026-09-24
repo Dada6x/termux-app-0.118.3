@@ -31,9 +31,11 @@ import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
+import android.widget.Button;
 
 import com.termux.R;
 import com.termux.app.terminal.TermuxActivityRootView;
+import com.termux.app.terminal.remote.TermuxWearRemoteInput;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.android.DeviceUtils;
 import com.termux.shared.packages.PermissionUtils;
@@ -201,6 +203,8 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
 
         setContentView(R.layout.activity_termux);
 
+        TermuxWearRemoteInput.bindActivity(this);
+
         // Load termux shared preferences
         // This will also fail if TermuxConstants.TERMUX_PACKAGE_NAME does not equal applicationId
         mPreferences = TermuxAppSharedPreferences.build(this, true);
@@ -238,6 +242,8 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
         setSettingsButtonView();
 
         setNewSessionButtonView();
+
+        setRemoteInputButtonView();
 
         setToggleKeyboardView();
 
@@ -321,6 +327,8 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
     @Override
     public void onDestroy() {
         super.onDestroy();
+
+        TermuxWearRemoteInput.bindActivity(null);
 
         Logger.logDebug(LOG_TAG, "onDestroy");
 
@@ -690,6 +698,22 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
                 R.string.action_new_session_failsafe, text -> mTermuxTerminalSessionClient.addNewSession(true, text),
                 -1, null, null);
             return true;
+        });
+    }
+
+    /** Wear OS only: the "Type on phone" button asks the paired phone (running the same app) to
+     * type a command for us. Hidden on phones so the drawer stays byte-identical there. */
+    private void setRemoteInputButtonView() {
+        final View remoteInputButton = findViewById(R.id.remote_input_button);
+        if (remoteInputButton == null) return;
+        if (!DeviceUtils.isWatchDevice(this)) {
+            remoteInputButton.setVisibility(View.GONE);
+            return;
+        }
+        remoteInputButton.setVisibility(View.VISIBLE);
+        remoteInputButton.setOnClickListener(v -> {
+            TermuxWearRemoteInput.requestPhoneInput(this);
+            getDrawer().closeDrawers();
         });
     }
 

@@ -50,6 +50,11 @@
 
     <string name="action_toggle_soft_keyboard">Keyboard</string>
 
+    <string name="action_type_on_phone">Type on phone</string>
+    <string name="remote_input_notification_title">Type in Termux</string>
+    <string name="remote_input_notification_text">Type a command to run on your watch</string>
+    <string name="remote_input_reply_label">Type for the watch</string>
+
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>
 
