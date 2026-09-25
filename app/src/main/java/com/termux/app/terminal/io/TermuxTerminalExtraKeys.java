@@ -9,6 +9,8 @@ import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.app.terminal.TermuxTerminalSessionClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
+import com.termux.app.terminal.remote.TermuxWearRemoteInput;
+import com.termux.shared.android.DeviceUtils;
 import com.termux.shared.terminal.io.TerminalExtraKeys;
 import com.termux.view.TerminalView;
 
@@ -32,6 +34,9 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         if ("KEYBOARD".equals(key)) {
             if(mTermuxTerminalViewClient != null)
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+        } else if ("PHONE".equals(key)) {
+            if(mTermuxTerminalViewClient != null && DeviceUtils.isWatchDevice(mTermuxTerminalViewClient.getActivity()))
+                TermuxWearRemoteInput.requestPhoneInput(mTermuxTerminalViewClient.getActivity());
         } else if ("DRAWER".equals(key)) {
             DrawerLayout drawerLayout = mTermuxTerminalViewClient.getActivity().getDrawer();
             if (drawerLayout.isDrawerOpen(Gravity.LEFT))

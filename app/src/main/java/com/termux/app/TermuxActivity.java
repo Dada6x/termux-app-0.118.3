@@ -204,6 +204,7 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
         setContentView(R.layout.activity_termux);
 
         TermuxWearRemoteInput.bindActivity(this);
+        TermuxWearRemoteInput.advertisePhoneInput(this);
 
         // Load termux shared preferences
         // This will also fail if TermuxConstants.TERMUX_PACKAGE_NAME does not equal applicationId
@@ -511,7 +512,7 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (DeviceUtils.isWatchDevice(this)) {
             // On Wear OS start with the extra keys row hidden and let the user reveal it on demand
-            // with a downward scroll (see onWatchTerminalScroll()).
+            // with a terminal scroll (see onWatchTerminalScroll()).
             terminalToolbarViewPager.setVisibility(View.GONE);
             mTerminalToolbarHiddenByWatchScroll = true;
             setWatchTerminalToolbarOverlay();
@@ -547,7 +548,7 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
     private static final int WATCH_ROUND_BEZEL_MARGIN_DP = 12;
 
     /** True when the terminal toolbar has been hidden by a watch scroll gesture and should be
-     * restored by the next scroll in the opposite direction. */
+     * restored by the next scroll. */
     private boolean mTerminalToolbarHiddenByWatchScroll = false;
 
     /** The last measured height in px of the terminal toolbar. Used as the slide offset when the
@@ -557,8 +558,10 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
     /** Duration in ms of the terminal toolbar hide/show slide animation on Wear OS. */
     private static final int WATCH_TERMINAL_TOOLBAR_ANIMATION_MS = 150;
 
-    /** How long in ms the terminal toolbar stays visible on Wear OS before auto-hiding. */
-    private static final int WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS = 2000;
+    /** How long in ms the terminal toolbar stays visible on Wear OS after the last terminal scroll or
+     * carousel touch before auto-hiding. Generous so there is time to swipe through the looping
+     * carousel keys without it vanishing mid-interaction. */
+    private static final int WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS = 6000;
 
     /** Handler running the auto-hide of the terminal toolbar on Wear OS. */
     private final Handler mTerminalToolbarHandler = new Handler();
@@ -570,36 +573,35 @@ public final class TermuxActivity extends Activity implements ServiceConnection 
             hideTerminalToolbarOnWatch(terminalToolbarViewPager);
     };
 
-    /** Toggle the terminal toolbar row on Wear OS based on the terminal scroll direction. Called
+    /** Reset the Wear OS terminal toolbar auto-hide timer. Called on any watch terminal scroll and
+     * on touches of the toolbar row itself so it never hides while the user is still using it. */
+    public void resetWatchTerminalToolbarAutoHideTimer() {
+        mTerminalToolbarHandler.removeCallbacks(mTerminalToolbarAutoHideRunnable);
+        mTerminalToolbarHandler.postDelayed(mTerminalToolbarAutoHideRunnable, WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS);
+    }
+
+    /** Reveal the terminal toolbar row on Wear OS while the user is scrolling the terminal. Called
      * by {@link TerminalView.WatchTerminalScrollListener} only on watches; on phones the listener
-     * is never registered so behaviour stays untouched. One transition per direction, no
-     * per-frame work. Scrolling downwards reveals the toolbar row, scrolling upwards hides it.
-     * Hiding is also possible by swiping down on the toolbar row itself (see
-     * {@link #onWatchTerminalToolbarSwipeDown()}). Once revealed the row auto-hides after
-     * {@link #WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS}; scrolling downwards again resets the timer. */
+     * is never registered so behaviour stays untouched. A scroll in any direction slides the
+     * toolbar row into view and resets the auto-hide timer, so the row stays up while the user is
+     * still scrolling towards it. It only hides again after a period of inactivity
+     * ({@link #WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS}) or when swiped down on the row itself (see
+     * {@link #onWatchTerminalToolbarSwipeDown()}). One transition per scroll, no per-frame work. */
     private void onWatchTerminalScroll(boolean scrollUp) {
         final View terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (terminalToolbarViewPager == null) return;
-        if (scrollUp) {
-            // Scrolling upwards: slide the toolbar down out of view.
-            mTerminalToolbarHandler.removeCallbacks(mTerminalToolbarAutoHideRunnable);
-            hideTerminalToolbarOnWatch(terminalToolbarViewPager);
-        } else {
-            // Scrolling downwards: slide the toolbar up into view again.
-            if (mTerminalToolbarHiddenByWatchScroll && terminalToolbarViewPager.getVisibility() != View.VISIBLE) {
-                mTerminalToolbarHiddenByWatchScroll = false;
-                terminalToolbarViewPager.animate().cancel();
-                terminalToolbarViewPager.setAlpha(0f);
-                terminalToolbarViewPager.setTranslationY(mTerminalToolbarHeightPx);
-                terminalToolbarViewPager.setVisibility(View.VISIBLE);
-                terminalToolbarViewPager.animate().translationY(0f).alpha(1f)
-                    .setDuration(WATCH_TERMINAL_TOOLBAR_ANIMATION_MS).start();
-            }
-            // Scrolling down also resets the auto-hide timer so the row stays up while the user
-            // keeps scrolling towards it.
-            mTerminalToolbarHandler.removeCallbacks(mTerminalToolbarAutoHideRunnable);
-            mTerminalToolbarHandler.postDelayed(mTerminalToolbarAutoHideRunnable, WATCH_TERMINAL_TOOLBAR_AUTO_HIDE_MS);
+        if (mTerminalToolbarHiddenByWatchScroll && terminalToolbarViewPager.getVisibility() != View.VISIBLE) {
+            mTerminalToolbarHiddenByWatchScroll = false;
+            terminalToolbarViewPager.animate().cancel();
+            terminalToolbarViewPager.setAlpha(0f);
+            terminalToolbarViewPager.setTranslationY(mTerminalToolbarHeightPx);
+            terminalToolbarViewPager.setVisibility(View.VISIBLE);
+            terminalToolbarViewPager.animate().translationY(0f).alpha(1f)
+                .setDuration(WATCH_TERMINAL_TOOLBAR_ANIMATION_MS).start();
         }
+        // Scrolling in any direction resets the auto-hide timer so the row stays up while the user
+        // keeps scrolling towards it, and only hides once the user stops interacting for a while.
+        resetWatchTerminalToolbarAutoHideTimer();
     }
 
     /** Hide (slide down + GONE) the terminal toolbar row on Wear OS. */

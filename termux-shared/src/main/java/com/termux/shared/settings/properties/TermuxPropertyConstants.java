@@ -283,7 +283,7 @@ public final class TermuxPropertyConstants {
     public static final String KEY_EXTRA_KEYS =  "extra-keys"; // Default: "extra-keys"
     //public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]"; // Single row
     public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'], ['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']]"; // Double row
-    public static final String DEFAULT_IVALUE_EXTRA_KEYS_WATCH = "[['ESC','HOME','UP','END','PGUP','TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN','KEYBOARD','ENTER']]"; // Single row for Wear OS
+    public static final String DEFAULT_IVALUE_EXTRA_KEYS_WATCH = "[['ESC','HOME','UP','END','PGUP','TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN','KEYBOARD','PHONE','ENTER']]"; // Single row for Wear OS
 
     /** Defines the key for extra keys style */
     public static final String KEY_EXTRA_KEYS_STYLE =  "extra-keys-style"; // Default: "extra-keys-style"

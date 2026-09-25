@@ -84,6 +84,10 @@ public class WearLoopingExtraKeysView extends RecyclerView implements IExtraKeys
     private Handler mHandler;
     private Runnable mSpecialButtonLongHoldRunnable;
 
+    /** Called on every touch the carousel receives (down and move), before the event is dispatched
+     * to the keys. Used to keep the terminal toolbar row alive while the user swipes the keys. */
+    private Runnable mOnUserInteractionRunnable;
+
     /** The number of times the first row of keys is repeated to fake an infinite loop. */
     private static final int LOOP_COPY_COUNT = 3;
     /** The default long press repeat delay in milliseconds for the repetitive keys. */
@@ -112,6 +116,7 @@ public class WearLoopingExtraKeysView extends RecyclerView implements IExtraKeys
             mSpecialButtonStates.put(specialButton.getKey(), new CarouselButtonState());
 
         setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false));
+
         setAdapter(new ExtraKeysAdapter());
 
         // Center snap each key instead of the default LinearSnapHelper start-edge snap, so the
@@ -131,6 +136,23 @@ public class WearLoopingExtraKeysView extends RecyclerView implements IExtraKeys
     /** Get the {@link ExtraKeysView.IExtraKeysView} client. */
     public ExtraKeysView.IExtraKeysView getExtraKeysViewClient() {
         return mExtraKeysViewClient;
+    }
+
+    /** Called on every touch this view receives (down and move), before dispatch to the key buttons,
+     * so e.g. the toolbar auto-hide timer can be reset even when a key button consumes the down event. */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (mOnUserInteractionRunnable != null) {
+            int action = ev.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE)
+                mOnUserInteractionRunnable.run();
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+
+    /** Set a callback invoked when the user touches the carousel. */
+    public void setOnUserInteractionRunnable(Runnable runnable) {
+        mOnUserInteractionRunnable = runnable;
     }
 
     /** Set the {@link ExtraKeysView.IExtraKeysView} client. */

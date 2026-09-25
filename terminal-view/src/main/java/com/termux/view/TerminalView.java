@@ -512,6 +512,19 @@ public final class TerminalView extends View {
                 return super.getExtractedText(request, flags);
             }
 
+            /** WearOS 3.x keyboards do not auto-dismiss when the app consumes the editor action the
+             * way WearOS 2.x did, so the send button must hide the IME explicitly. */
+            private void hideWatchKeyboard() {
+                InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm == null) return;
+                final Runnable hide = () -> {
+                    if (TerminalView.this.getWindowToken() != null)
+                        imm.hideSoftInputFromWindow(TerminalView.this.getWindowToken(), 0);
+                };
+                hide.run();
+                TerminalView.this.postDelayed(hide, 150);
+            }
+
             @Override
             public boolean performEditorAction(int editorAction) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: performEditorAction(" + editorAction + ")");
@@ -523,6 +536,7 @@ public final class TerminalView extends View {
                     sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
                     sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
                     notifyWatchExtractionChanged();
+                    hideWatchKeyboard();
                     return true;
                 }
                 return super.performEditorAction(editorAction);

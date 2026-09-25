@@ -1,22 +1,25 @@
 package com.termux.app.terminal.remote;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.google.android.gms.wearable.CapabilityClient;
-import com.google.android.gms.wearable.CapabilityInfo;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.Wearable;
-import com.google.android.gms.tasks.Task;
 
+import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.shared.android.DeviceUtils;
+import com.termux.shared.logger.Logger;
 
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /** Shared constants and helpers for the "type on phone" relay between the watch and the paired
  * phone, both running the same Termux app. The watch asks the phone to do the typing: the phone
@@ -49,6 +52,47 @@ public final class TermuxWearRemoteInput {
         sActivity = activity;
     }
 
+    /** Get the currently bound {@link TermuxActivity}, if any. */
+    @Nullable
+    public static TermuxActivity getCurrentActivity() {
+        return sActivity;
+    }
+
+    /** Phone side: send text typed on the phone back over the Wear link to the watch that asked. */
+    public static void sendReply(@NonNull final Context context, @NonNull final String originNodeId, @NonNull final String text) {
+        Logger.logDebug(LOG_TAG, "Sending remote input reply \"" + text + "\" to node " + originNodeId);
+        Wearable.getMessageClient(context).sendMessage(originNodeId, MESSAGE_PATH_REPLY, text.getBytes(StandardCharsets.UTF_8))
+            .addOnFailureListener(e -> Logger.logError(LOG_TAG, "Reply send failed: " + e.getMessage()));
+    }
+
+    /** Phone side: show the "type for the watch" input as an in-app dialog instead of a notification
+     * when Termux is already open on the phone. Runs on the main thread. */
+    public static void showPhoneInputDialog(@NonNull final TermuxActivity activity, @NonNull final String originNodeId) {
+        final EditText input = new EditText(activity);
+        input.setSingleLine(false);
+        input.setHint(R.string.remote_input_reply_label);
+        new AlertDialog.Builder(activity)
+            .setTitle(R.string.remote_input_notification_title)
+            .setMessage(R.string.remote_input_notification_text)
+            .setView(input)
+            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                String text = input.getText().toString();
+                if (text.length() > 0) sendReply(activity, originNodeId, text);
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    /** Advertise the "phone input" capability so the watch can find this install. Called from the
+     * activity on phones; the listener service advertises it as well but may never be bound by Play
+     * services when nothing has arrived yet, so the activity call guarantees the phone is
+     * discoverable after the first open. No-op on watches. */
+    public static void advertisePhoneInput(@NonNull final Context context) {
+        if (DeviceUtils.isWatchDevice(context)) return;
+        Wearable.getCapabilityClient(context).addLocalCapability(CAPABILITY_PHONE_INPUT)
+            .addOnFailureListener(e -> Logger.logError(LOG_TAG, "Could not advertise phone input capability: " + e.getMessage()));
+    }
+
     /** Inject text received from the phone into the currently open terminal on the watch. Runs on
      * the main thread; if no activity is alive the text is silently dropped. */
     public static void injectOnWatch(@NonNull final String text) {
@@ -59,34 +103,37 @@ public final class TermuxWearRemoteInput {
         });
     }
 
-    /** Watch side: find the connected phone running this app and ask it to type for us. Shows a
-     * toast if no reachable phone was found. */
+    /** Watch side: ask any connected phone running this app to type for us. Sends the request to
+     * every connected node since the capability the phone advertises is only registered after Play
+     * services binds its listener service (lazy), which may never happen when the phone connects
+     * first. The phone's listener ignores it if the payload is not for it (watch-only hookup). */
     public static void requestPhoneInput(@NonNull final Context context) {
-        CapabilityClient capabilityClient = Wearable.getCapabilityClient(context);
-        Task<CapabilityInfo> capabilityTask =
-            capabilityClient.getCapability(CAPABILITY_PHONE_INPUT, CapabilityClient.FILTER_REACHABLE);
-        capabilityTask.addOnCompleteListener(task -> {
-            final String phoneNodeId = getFirstNodeId(task);
-            if (phoneNodeId == null) {
-                Toast.makeText(context, "No paired phone with Termux found", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Wearable.getMessageClient(context).sendMessage(phoneNodeId, MESSAGE_PATH_REQUEST, null);
-            Toast.makeText(context, "Type the command in the phone's notification", Toast.LENGTH_SHORT).show();
-        });
+        Wearable.getNodeClient(context).getConnectedNodes()
+            .addOnSuccessListener(nodes -> {
+                if (nodes == null || nodes.isEmpty()) {
+                    Toast.makeText(context, "No paired phone is connected", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                for (Node node : nodes) {
+                    Logger.logDebug(LOG_TAG, "Sending remote input request to node \"" + node.getDisplayName() + "\"");
+                    Wearable.getMessageClient(context).sendMessage(node.getId(), MESSAGE_PATH_REQUEST, null)
+                        .addOnSuccessListener(aVoid -> Logger.logDebug(LOG_TAG, "Remote input request sent"))
+                        .addOnFailureListener(e -> Logger.logError(LOG_TAG, "Remote input request send failed: " + e.getMessage()));
+                }
+                Toast.makeText(context, "Type the command in the phone's notification", Toast.LENGTH_LONG).show();
+            })
+            .addOnFailureListener(e -> {
+                Logger.logError(LOG_TAG, "Could not read connected nodes: " + e.getMessage());
+                Toast.makeText(context, "Could not reach the Wear data layer", Toast.LENGTH_LONG).show();
+            });
     }
 
-    @Nullable
-    private static String getFirstNodeId(@Nullable Task<CapabilityInfo> task) {
-        if (task == null || !task.isSuccessful() || task.getResult() == null) return null;
-        Set<Node> nodes = task.getResult().getNodes();
-        for (Node node : nodes) {
-            if (node.isNearby()) return node.getId();
-        }
-        for (Node node : nodes) {
-            return node.getId();
-        }
-        return null;
+    /** Run the given work on the main thread from the Wear Data-Layer binder thread. View + dialog
+     * creation must happen on the main thread or an un-prepared Looper freezes the app. */
+    public static void postOnMainThread(@NonNull final Runnable runnable) {
+        HANDLER.post(runnable);
     }
+
+    private static final String LOG_TAG = "TermuxWearRemoteInput";
 
 }

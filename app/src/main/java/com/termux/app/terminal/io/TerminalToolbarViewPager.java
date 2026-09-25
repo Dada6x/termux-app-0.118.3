@@ -53,6 +53,9 @@ public class TerminalToolbarViewPager {
                     extraKeysView.setButtonTextAllCaps(mActivity.getProperties().shouldExtraKeysTextBeAllCaps());
                     mActivity.setExtraKeysView(extraKeysView);
                     extraKeysView.reload(mActivity.getProperties().getExtraKeysInfo());
+                    // Keep the toolbar row up while the user swipes the carousel keys; every touch
+                    // resets the auto-hide timer so it never hides mid-scroll.
+                    extraKeysView.setOnUserInteractionRunnable(mActivity::resetWatchTerminalToolbarAutoHideTimer);
                 } else {
                     layout = inflater.inflate(R.layout.view_terminal_toolbar_extra_keys, collection, false);
                     ExtraKeysView extraKeysView = (ExtraKeysView) layout;

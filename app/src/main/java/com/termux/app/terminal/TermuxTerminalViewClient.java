@@ -21,6 +21,7 @@ import android.widget.Toast;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.shared.android.DeviceUtils;
 import com.termux.shared.data.UrlUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.interact.MessageDialogUtils;
@@ -563,8 +564,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             // Clear any previous flags to disable soft keyboard in case setting updated
             KeyboardUtils.clearDisableSoftKeyboardFlags(mActivity);
 
-            // If soft keyboard is to be hidden on startup
-            if (isStartup && mActivity.getProperties().shouldSoftKeyboardBeHiddenOnStartup()) {
+            // If soft keyboard is to be hidden on startup, or on a watch device where the keyboard
+            // should only open when the terminal is tapped or the KEYBOARD toggle in the extra keys
+            // carousel is pressed
+            if (isStartup && (mActivity.getProperties().shouldSoftKeyboardBeHiddenOnStartup() || DeviceUtils.isWatchDevice(mActivity))) {
                 Logger.logVerbose(LOG_TAG, "Hiding soft keyboard on startup");
                 // Required to keep keyboard hidden when Termux app is switched back from another app
                 KeyboardUtils.setSoftKeyboardAlwaysHiddenFlags(mActivity);

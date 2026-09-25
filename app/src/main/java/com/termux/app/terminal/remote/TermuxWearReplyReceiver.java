@@ -11,6 +11,7 @@ import androidx.core.app.RemoteInput;
 import com.google.android.gms.wearable.Wearable;
 
 import com.termux.shared.android.DeviceUtils;
+import com.termux.shared.logger.Logger;
 
 import java.nio.charset.StandardCharsets;
 
@@ -20,22 +21,26 @@ public class TermuxWearReplyReceiver extends BroadcastReceiver {
 
     public static final String KEY_REPLY_TEXT = "key_reply_text";
     public static final String ACTION_REPLY = "com.termux.remote_input.REPLY";
+    private static final String LOG_TAG = "TermuxWearReplyReceiver";
 
     @Override
     public void onReceive(@NonNull Context context, @NonNull Intent intent) {
-        if (DeviceUtils.isWatchDevice(context)) return;
+        try {
+            if (DeviceUtils.isWatchDevice(context)) return;
 
-        Bundle results = RemoteInput.getResultsFromIntent(intent);
-        if (results == null) return;
+            Bundle results = RemoteInput.getResultsFromIntent(intent);
+            if (results == null) return;
 
-        CharSequence text = results.getCharSequence(KEY_REPLY_TEXT);
-        if (text == null || text.length() == 0) return;
+            CharSequence text = results.getCharSequence(KEY_REPLY_TEXT);
+            if (text == null || text.length() == 0) return;
 
-        String originNodeId = intent.getStringExtra(TermuxWearRemoteInput.EXTRA_ORIGIN_NODE_ID);
-        if (originNodeId == null) return;
+            String originNodeId = intent.getStringExtra(TermuxWearRemoteInput.EXTRA_ORIGIN_NODE_ID);
+            if (originNodeId == null) return;
 
-        Wearable.getMessageClient(context).sendMessage(originNodeId, TermuxWearRemoteInput.MESSAGE_PATH_REPLY,
-            text.toString().getBytes(StandardCharsets.UTF_8));
+            TermuxWearRemoteInput.sendReply(context, originNodeId, text.toString());
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Exception handling reply: " + e.getMessage());
+        }
     }
 
 }
